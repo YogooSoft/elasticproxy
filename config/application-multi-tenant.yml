@@ -1,0 +1,293 @@
+# ElasticProxyServer 多租户配置
+# 使用方法: --spring.profiles.active=multi-tenant
+
+server:
+  port: 8000
+  # HTTP服务器配置 - 支持大请求
+  max-http-header-size: 65536  # 64KB HTTP头大小限制
+  netty:
+    # 请求解码配置
+    max-initial-line-length: 8192  # 8KB 初始行长度
+    max-header-size: 65536  # 64KB 请求头大小
+    max-chunk-size: 8192  # 8KB 块大小
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,refresh,configprops,unified-search,tenants
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+spring:
+  application:
+    name: ElasticProxyServer
+  profiles:
+    active: multi-tenant
+  http:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  # WebFlux配置 - 支持大请求体（如_bulk操作）
+  webflux:
+    multipart:
+      max-in-memory-size: 67108864  # 64MB - 支持大bulk操作
+  elasticsearch:
+    uris: http://172.168.0.100:19200
+    username: elastic
+    password: ***
+
+# Elasticsearch配置
+elasticsearch:
+  url: http://172.168.0.114:19200,http://172.168.0.114:19200
+  username: "elastic"
+  password: "***"
+  requestTimeoutSeconds: 30
+  maxConnections: 200
+  pendingAcquireMaxCount: 10000
+  pendingAcquireTimeoutSeconds: 5
+  connectTimeoutMillis: 3000
+  maxIdleTimeSeconds: 30
+  maxLifeTimeSeconds: 300
+  
+  # 多集群配置
+  clusters:
+    logs:
+      url: http://172.168.0.100:19200
+      username: "elastic"
+      password: "***"
+    metrics:
+      url: http://172.168.0.100:19200
+      username: "elastic"
+      password: "***"
+
+# 代理配置
+proxy:
+  logLevel: INFO
+  useElasticsearchMonitoring: true
+  # 监控相关超时配置
+  monitoringTimeoutSeconds: 15
+  monitoringRetryAttempts: 2
+  allowList: ["127.0.0.1", "::1", "10.0.0.0/24","192.168.65.0/24","172.168.0.0/24"]
+  blockList: []
+  
+  # 基础限制配置（作为默认租户配置）
+  limits:
+    rateLimit: 100/minute
+    maxResultWindow: 10000
+    maxQueryDepth: 5
+    maxAggregationSize: 500
+    maxSearchTerms: 1000
+    allowPrefixWildcard: false
+    strictQueryValidation: false
+    maxQueryComplexity: 100
+    allowRegexpQuery: false
+    regexpMaxLength: 50
+  
+  # 统一搜索配置
+  unified-search:
+    enabled: true
+    strictTypeDetection: false
+    defaultMatchAnalyzer: "standard"
+    maxConditions: 50
+    allowedIndices: ["*"]  # 全局默认配置，实际会被租户级配置覆盖
+    rangeFields: ["date", "time", "timestamp", "created", "updated"]
+    exactMatchFields: ["id", "code", "status", "type", "category"]
+    timeoutSeconds: 30
+    enableQueryCache: true
+    queryCacheTtlSeconds: 300
+    enableQueryLogging: true
+    enablePerformanceMetrics: true
+  
+  # ==================== 多租户配置 ====================
+  multi-tenant:
+    # 启用多租户功能
+    enabled: true
+    
+    # 默认租户
+    defaultTenant: "default"
+    
+    # 严格隔离模式
+    strictTenantIsolation: true
+    
+    # 不允许匿名访问
+    allowAnonymousAccess: false
+    
+    # 租户解析超时时间
+    tenantResolutionTimeoutMs: 1000
+    
+    # 缓存配置
+    cache:
+      tenantContextTtlMinutes: 15
+      maxCachedTenants: 1000
+      basicAuthCacheTtlMinutes: 30
+    
+    # 租户定义
+    tenants:
+      # 默认租户（兼容现有配置）
+      default:
+        name: "默认租户"
+        description: "向后兼容的默认租户，使用全局配置"
+        basicAuth:
+          username: "default"
+          password: "default-secret"
+        elasticsearch:
+          inherit: true
+        limits:
+          inherit: true
+        unified-search:
+          inherit: true
+        monitoring:
+          enabled: true
+          logLevel: "INFO"
+          
+      # 租户A - 日志分析专用
+      tenant-logs:
+        name: "日志分析租户"
+        description: "专用于日志数据分析的租户，具有较高权限"
+        basicAuth:
+          username: "logs-user"
+          password: "logs-secret-2024"
+        allowedIps: ["127.0.0.1", "::1", "10.1.0.0/24", "192.168.1.0/24","172.168.0.0/24"]
+        elasticsearch:
+          cluster: "logs"
+          # 不设置username/password，使用集群默认的 elastic/zIUPPogxwxCR
+          requestTimeoutSeconds: 45
+          maxConnections: 50
+        limits:
+          inherit: false
+          rateLimit: "200/minute"
+          maxResultWindow: 15000
+          maxQueryDepth: 8
+          maxAggregationSize: 800
+          maxSearchTerms: 1500
+          allowPrefixWildcard: true
+          strictQueryValidation: true
+          maxQueryComplexity: 150
+          allowRegexpQuery: true
+          regexpMaxLength: 100
+          allowedIndices: ["logs-*", "app-logs-*", "nginx-*", "apache-*", "logs:*"]
+          forbiddenIndices: ["system-*", ".security*", ".kibana*", "metrics-*", "metrics:*"]
+          allowedOperations: ["search", "count", "explain", "scroll"]
+        unified-search:
+          inherit: false
+          enabled: true
+          strictTypeDetection: true
+          defaultMatchAnalyzer: "ik_smart"
+          maxConditions: 80
+          allowedIndices: ["logs-*", "app-logs-*"]
+          rangeFields: ["timestamp", "created_at", "@timestamp", "log_time"]
+          exactMatchFields: ["level", "service", "host", "logger", "component"]
+          timeoutSeconds: 45
+          enableQueryCache: true
+          queryCacheTtlSeconds: 600
+          enableQueryLogging: true
+          enablePerformanceMetrics: true
+        monitoring:
+          enabled: true
+          logLevel: "DEBUG"
+          trackQueries: true
+          trackPerformance: true
+          indexPrefix: "tenant-logs-proxy-logs"
+          
+      # 租户B - 指标监控专用
+      tenant-metrics:
+        name: "指标监控租户"
+        description: "专用于指标数据监控的租户，高性能查询配置"
+        basicAuth:
+          username: "metrics-user"
+          password: "metrics-secret-2024"
+        allowedIps: ["127.0.0.1", "10.2.0.0/24", "192.168.2.0/24"]
+        elasticsearch:
+          inherit: false
+          cluster: "metrics"
+          # 使用集群默认凭据 elastic/zIUPPogxwxCR
+          maxConnections: 30
+          requestTimeoutSeconds: 20
+        limits:
+          inherit: false
+          rateLimit: "500/minute"
+          maxResultWindow: 20000
+          maxQueryDepth: 6
+          maxAggregationSize: 1000
+          maxSearchTerms: 2000
+          allowPrefixWildcard: false
+          strictQueryValidation: false
+          maxQueryComplexity: 200
+          allowedIndices: ["metrics-*", "apm-*", "beats-*", "monitoring-*", "metrics:*"]
+          forbiddenIndices: ["logs-*", "system-*", "logs:*"]
+          allowedOperations: ["search", "count", "explain", "aggregate"]
+        unified-search:
+          inherit: false
+          enabled: true
+          strictTypeDetection: false
+          defaultMatchAnalyzer: "standard"
+          maxConditions: 100
+          allowedIndices: ["metrics-*", "apm-*"]
+          rangeFields: ["@timestamp", "timestamp", "time", "collected_at"]
+          exactMatchFields: ["service.name", "host.name", "container.id", "pod.name"]
+          timeoutSeconds: 20
+          enableQueryCache: true
+          queryCacheTtlSeconds: 300
+          enableQueryLogging: true
+          enablePerformanceMetrics: true
+        monitoring:
+          enabled: true
+          logLevel: "INFO"
+          indexPrefix: "tenant-metrics-proxy-logs"
+          
+      # 租户C - 只读访问
+      tenant-readonly:
+        name: "只读访问租户"
+        description: "仅允许搜索操作的只读租户，权限受限"
+        basicAuth:
+          username: "readonly-user"
+          password: "readonly-secret-2024"
+        allowedIps: ["127.0.0.1", "192.168.100.0/24"]
+        elasticsearch:
+          inherit: true
+          maxConnections: 10
+          requestTimeoutSeconds: 15
+        limits:
+          inherit: false
+          rateLimit: "50/minute"
+          maxResultWindow: 5000
+          maxQueryDepth: 3
+          maxAggregationSize: 100
+          maxSearchTerms: 100
+          allowPrefixWildcard: false
+          strictQueryValidation: true
+          maxQueryComplexity: 50
+          allowRegexpQuery: false
+          allowedIndices: ["public-*", "shared-*", "demo-*"]
+          forbiddenIndices: ["logs-*", "metrics-*", "system-*", "private-*"]
+          allowedOperations: ["search", "count", "explain"]
+        unified-search:
+          inherit: false
+          enabled: true
+          strictTypeDetection: true
+          maxConditions: 20
+          allowedIndices: ["public-*", "shared-*"]
+          timeoutSeconds: 15
+          enableQueryCache: true
+          queryCacheTtlSeconds: 900
+          enableQueryLogging: true
+          enablePerformanceMetrics: false
+        monitoring:
+          enabled: true
+          logLevel: "WARN"
+          trackQueries: true
+          trackPerformance: false
+
+# 日志配置
+logging:
+  level:
+    com.yogoosoft.elasticproxy.tenant: DEBUG
+    com.yogoosoft.elasticproxy.web.filters.TenantAuthFilter: DEBUG
+    UNIFIED_SEARCH_QUERY: INFO
+    root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{tenantId:-default}] %logger{36} - %msg%n"

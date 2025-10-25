@@ -1,0 +1,139 @@
+server:
+  port: 8000
+  # HTTP服务器配置 - 支持大请求
+  max-http-header-size: 65536  # 64KB HTTP头大小限制
+  netty:
+    # 请求解码配置
+    max-initial-line-length: 8192  # 8KB 初始行长度
+    max-header-size: 65536  # 64KB 请求头大小
+    max-chunk-size: 8192  # 8KB 块大小
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,refresh,configprops,unified-search
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+spring:
+  # 应用程序配置
+  application:
+    name: ElasticProxyServer
+  # 编码配置
+  http:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  # WebFlux配置 - 支持大请求体（如_bulk操作）
+  webflux:
+    multipart:
+      max-in-memory-size: 67108864  # 64MB - 支持大bulk操作
+  # Elasticsearch连接配置
+  elasticsearch:
+    uris: http://172.168.0.100:19200
+    username: elastic
+    password: ***
+    connection-timeout: 3s
+    socket-timeout: 30s
+
+elasticsearch:
+  url: http://172.168.0.100:19200
+  username: "elastic"
+  password: "***"
+  requestTimeoutSeconds: 45
+  maxConnections: 200
+  pendingAcquireMaxCount: 10000
+  pendingAcquireTimeoutSeconds: 10
+  connectTimeoutMillis: 5000
+  maxIdleTimeSeconds: 30
+  maxLifeTimeSeconds: 600
+  clusters:
+    logs:
+      url: http://172.168.0.100:19200
+      username: "elastic"
+      password: "***"
+    metrics:
+      url: http://172.168.0.100:19200
+      username: "elastic"
+      password: "***"
+
+proxy:
+  logLevel: INFO
+  useElasticsearchMonitoring: true
+  # 监控相关超时配置
+  monitoringTimeoutSeconds: 15
+  monitoringRetryAttempts: 2
+  allowList: ["127.0.0.1", "::1", "10.0.0.0/24","192.168.65.0/24","172.168.0.0/24"]
+  blockList: []
+  limits:
+    rateLimit: 100/minute
+    maxResultWindow: 10000
+    maxQueryDepth: 5
+    maxAggregationSize: 500
+    maxSearchTerms: 1000
+    allowPrefixWildcard: false
+    strictQueryValidation: false
+    maxQueryComplexity: 100
+    allowRegexpQuery: false
+    regexpMaxLength: 50 
+  unified-search:
+    # === 基础配置 ===
+    enabled: true
+    defaultMatchAnalyzer: "standard"
+    maxConditions: 50
+    timeoutSeconds: 30
+    rangeFields: ["date", "time", "timestamp", "created", "updated", "bizDate", "biz_date", "price", "amount", "count", "quantity", "age", "score", "version"]
+    exactMatchFields: ["id", "code", "status", "type", "category", "corpid", "corp_id", "userId", "user_id", "orderId", "order_id", "transactionId", "transaction_id"]
+    # === v1.3.6 功能 ===
+    # 索引访问控制 - 限制可访问的索引模式
+    allowedIndices: ["test1", "elastic-proxy-logs-*", "logs-*", "metrics-*", "business-*"]
+    # 查询缓存功能 - 启用查询结果缓存
+    enableQueryCache: true
+    queryCacheTtlSeconds: 300
+    
+    # === v1.3.7 功能 ===
+    # 严格类型检测模式 - 控制查询类型推断策略
+    strictTypeDetection: false
+    # 查询日志记录 - 详细的统一搜索查询审计
+    enableQueryLogging: true
+    # 性能指标收集 - 基于Micrometer的专业级性能监控
+    enablePerformanceMetrics: true
+  
+  # ==================== 🆕 多租户配置 ====================
+  multi-tenant:
+    # 多租户功能开关（默认关闭，保持向后兼容）
+    enabled: false
+    
+    # 默认租户配置
+    defaultTenant: "default"
+    
+    # 严格隔离模式（true=强制Basic认证，false=允许匿名访问使用默认配置）
+    strictTenantIsolation: true
+    
+    # 是否允许匿名访问（使用默认租户配置）
+    allowAnonymousAccess: false
+    
+    # 租户解析超时时间（毫秒）
+    tenantResolutionTimeoutMs: 1000
+    
+    # 租户缓存配置
+    cache:
+      # 租户上下文缓存时间（分钟）
+      tenantContextTtlMinutes: 15
+      # 最大缓存租户数量
+      maxCachedTenants: 1000
+      # Basic认证结果缓存时间（分钟）
+      basicAuthCacheTtlMinutes: 30
+    
+  # 租户定义（默认为空，启用多租户时需要配置）
+  tenants: {}
+
+# 日志配置
+logging:
+  level:
+    com.yogoosoft.elasticproxy: INFO
+    root: INFO

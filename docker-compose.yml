@@ -1,0 +1,27 @@
+# Docker Compose configuration for ElasticProxyServer
+# 仅包含ElasticProxyServer服务，连接外部Elasticsearch
+
+services:
+  # ElasticProxyServer 服务
+  elasticproxy:
+    image: elasticproxy:1.5.3
+    container_name: elasticproxy-server
+    environment:
+      # JVM 配置
+      - JVM_OPTS=${JVM_OPTS:--Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseContainerSupport}
+      # Spring 配置
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-docker}
+    ports:
+      - "8000:8000"
+    volumes:
+      # 挂载配置文件
+      - ./config/application-multi-tenant.yml:/app/config/application.yml:ro
+      # 挂载日志目录
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
