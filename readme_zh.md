@@ -413,6 +413,9 @@ proxy:
 - 🎓 **培训服务**: 团队技能培训和最佳实践分享
 - 🚀 **定制开发**: 根据业务需求定制功能模块
 
+### 更多信息
+- 🌐 **详情可以访问 elasticproxy.com 网站**
+
 ---
 
 **ElasticProxyServer - 让Elasticsearch访问更安全、更智能、更高效！** 🚀

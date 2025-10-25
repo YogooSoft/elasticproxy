@@ -413,6 +413,9 @@ proxy:
 - 🎓 **Training Services**: Team skill training and best practice sharing
 - 🚀 **Custom Development**: Customized feature modules based on business requirements
 
+### More Information
+- 🌐 **For more details, please visit elasticproxy.com website**
+
 ---
 
 **ElasticProxyServer - Making Elasticsearch access more secure, intelligent, and efficient!** 🚀
