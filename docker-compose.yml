@@ -4,7 +4,7 @@
 services:
   # ElasticProxyServer 服务
   elasticproxy:
-    image: elasticproxy:1.5.3
+    image: linjifan/elasticproxy:1.5.3
     container_name: elasticproxy-server
     environment:
       # JVM 配置
